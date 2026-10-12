@@ -85,6 +85,15 @@
         "name": "Chroma Studio Project",
         "role": "Editor"
       }
-    ]
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "cocre6369",
+      "repo": "REA-Arena-Apps"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cocre6369/REA-Arena-Apps.git"
   }
 }
