@@ -343,7 +343,7 @@ export function snapshotDoc(doc) {
       blend: l.blend, locked: l.locked, alphaLocked: l.alphaLocked, clipped: l.clipped,
       x: l.x, y: l.y,
     });
-    n.maskEnabled = l.maskEnabled; n.maskLinked = l.maskLinked; n.expanded = l.expanded;
+    n.maskEnabled = l.maskEnabled; n.maskLinked = l.maskLinked; n.maskInverted = l.maskInverted; n.expanded = l.expanded;
     n.canvas = l.canvas ? copyCanvas(l.canvas) : null;
     n.mask = l.mask ? copyCanvas(l.mask) : null;
     n.adjustment = l.adjustment ? { kind: l.adjustment.kind, params: structuredClone(l.adjustment.params) } : null;
@@ -374,7 +374,7 @@ export function restoreDoc(doc, snap) {
       blend: s.blend, locked: s.locked, alphaLocked: s.alphaLocked, clipped: s.clipped,
       x: s.x, y: s.y,
     });
-    n.maskEnabled = s.maskEnabled; n.maskLinked = s.maskLinked; n.expanded = s.expanded;
+    n.maskEnabled = s.maskEnabled; n.maskLinked = s.maskLinked; n.maskInverted = s.maskInverted; n.expanded = s.expanded;
     n.canvas = s.canvas ? copyCanvas(s.canvas) : null;
     n.mask = s.mask ? copyCanvas(s.mask) : null;
     n.adjustment = s.adjustment ? { kind: s.adjustment.kind, params: structuredClone(s.adjustment.params) } : null;

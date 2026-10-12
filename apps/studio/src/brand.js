@@ -4,7 +4,7 @@ export const BRAND = {
   name: 'Chroma Studio',
   short: 'Chroma',
   tagline: 'Image editor',
-  version: '0.1.0',
+  version: '0.1.1',
   fileExt: 'csp',       // native project extension
   fileExtLabel: 'Chroma Studio Project',
   vendor: 'Chroma',

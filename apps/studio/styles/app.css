@@ -335,3 +335,8 @@ canvas.mini { width: 100%; display: block; border: 1px solid var(--line-2); bord
 .viewport { overflow: hidden; touch-action: none; }
 .canvasholder { display: block; box-shadow: 0 8px 28px #0009; }
 .canvasholder .view, .canvasholder .overlay { width: 100%; height: 100%; }
+
+/* Distinguish editable mask from pixel thumbnail and disabled masks. */
+.layer-mask.editing { outline: 2px solid var(--accent); outline-offset: 1px; }
+.layer-mask.disabled { opacity: .45; text-decoration: line-through; }
+.layer-thumb { cursor: pointer; }

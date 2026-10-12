@@ -174,6 +174,7 @@ export function buildOptionsBar(app) {
         el('button', { class: 'btn small primary', onclick: () => app.commitFreeTransform() }, '✓ Commit transform'),
         el('button', { class: 'btn small', onclick: () => app.cancelTransform() }, '✕ Cancel')));
     }
+    if (app.maskEditingLayerId === app.doc.activeLayerId) bar.append(el('span', { class: 'hint' }, 'Editing mask · Brush reveals · Eraser hides'));
     bar.append(el('span', { class: 'grow' }));
     bar.append(el('div', { class: 'opt' },
       el('button', { class: 'btn small', onclick: () => app.actions['edit.preferences'].run() }, 'Preferences')));
@@ -202,6 +203,7 @@ export function buildStatusBar(app) {
     bar.append(el('span', { class: 'st' }, `${fmtNum(doc.width)} × ${fmtNum(doc.height)} px`));
     bar.append(el('span', { class: 'st' }, `${doc.flat().length} layer${doc.flat().length === 1 ? '' : 's'}${L ? ' · ' + L.name : ''}`));
     if (sel.has) bar.append(el('span', { class: 'st' }, `selection ${(cov * 100).toFixed(1)}%`));
+    if (app.maskEditingLayerId === L?.id) bar.append(el('span', { class: 'st' }, 'MASK EDIT'));
     bar.append(el('span', { class: 'grow' }));
     bar.append(el('span', { class: 'st subtle' }, app._status || ''));
   };

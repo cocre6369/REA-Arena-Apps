@@ -1,6 +1,6 @@
 {
   "name": "chroma-studio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Chroma Studio \u2014 an independent image editor (Electron)",
   "main": "desktop/main.js",
   "author": "Chroma Studio",
@@ -14,7 +14,8 @@
     "dist:dir": "electron-builder --dir --win --x64",
     "dist:portable": "electron-builder --win --x64 --config.win.target=portable",
     "dist:linux": "electron-builder --linux --x64",
-    "postinstall": "echo ok"
+    "postinstall": "echo ok",
+    "check:source": "node tools/check-source.mjs"
   },
   "devDependencies": {
     "electron": "^33.2.0",

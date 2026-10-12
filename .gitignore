@@ -26,3 +26,9 @@ node_modules/
 apps/studio/dist/
 apps/studio/node_modules/
 *.exe
+
+# These are application source/preview files, not the ignored local toolchain.
+!apps/studio/tools/
+!apps/studio/tools/serve.cjs
+!apps/studio/src/tools/
+!apps/studio/src/tools/*.js

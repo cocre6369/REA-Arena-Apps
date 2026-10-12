@@ -70,10 +70,15 @@ function layersPanel(app, box) {
       ...BLEND_MODES.map(([id, name]) => el('option', { value: id, selected: id === L.blend }, name)));
     const op = el('input', { type: 'number', min: 0, max: 100, value: Math.round(L.opacity * 100), style: { width: '54px' },
       oninput: (e) => { L.opacity = clamp(Number(e.target.value) / 100, 0, 1); app.update({ render: true }); } });
-    const fill = el('input', { type: 'number', min: 0, max: 100, value: 100, style: { width: '54px' } });
-    blendBar.append(sel, el('span', { class: 'subtle' }, 'Op'), op, el('span', { class: 'subtle' }, 'Fill'), fill);
+    blendBar.append(sel, el('span', { class: 'subtle' }, 'Opacity'), op);
+    if (L.mask) blendBar.append(el('span', { class: 'subtle' }, app.maskEditingLayerId === L.id ? 'Mask selected' : 'Pixels selected'));
   }
   box.append(bar, blendBar);
+  if (L?.mask) box.append(el('div', { class: 'row wrap', style: { margin: '5px 0' } },
+    el('button', { class: 'btn small', onclick: () => app.editMask() }, app.maskEditingLayerId === L.id ? 'Edit pixels' : 'Edit mask'),
+    el('button', { class: 'btn small', onclick: () => app.maskToSelection() }, 'To selection'),
+    el('button', { class: 'btn small', onclick: () => app.invertMask() }, 'Invert mask'),
+    el('button', { class: 'btn small', onclick: () => app.deleteMask(true) }, 'Apply mask')));
 
   const list = el('div', { class: 'layer-list' });
   const renderRow = (layer, depth) => {
@@ -97,18 +102,26 @@ function layersPanel(app, box) {
       inp.onblur = done;
       inp.onkeydown = (ev) => { if (ev.key === 'Enter') done(); };
     };
+    thumb.title = 'Click to edit layer pixels';
+    thumb.onclick = (e) => { e.stopPropagation(); doc.activeLayerId = layer.id; app.maskEditingLayerId = null; app.update({ panels: true }); };
     row.append(thumb, vis, name);
     if (layer.hasMask) {
       const mt = el('div', { class: 'layer-mask' });
       mt.style.backgroundImage = `url(${maskThumb(layer.mask, 22).toDataURL()})`;
-      mt.onclick = (e) => { e.stopPropagation(); layer.maskEnabled = !layer.maskEnabled; app.update({ render: true, panels: true }); };
-      mt.title = 'Layer mask — click to toggle';
+      if (app.maskEditingLayerId === layer.id) mt.classList.add('editing');
+      if (!layer.maskEnabled) mt.classList.add('disabled');
+      mt.onclick = (e) => {
+        e.stopPropagation(); doc.activeLayerId = layer.id;
+        if (e.altKey) { layer.maskEnabled = !layer.maskEnabled; app.push('Toggle Layer Mask'); }
+        else { app.maskEditingLayerId = layer.id; app.channelPreview = null; app.setActiveTool('brush'); app.update({ panels: true, status: true }); }
+      };
+      mt.title = 'Click to edit mask (Brush reveals, Eraser hides). Alt-click to enable/disable';
       row.append(mt);
     }
     if (layer.type !== 'raster') row.append(el('span', { class: 'kind' }, layer.type[0].toUpperCase()));
     if (layer.clipped) row.append(el('span', { class: 'kind' }, '⤵'));
 
-    row.onclick = () => { doc.activeLayerId = layer.id; app.update({ panels: true }); };
+    row.onclick = () => { doc.activeLayerId = layer.id; app.maskEditingLayerId = null; app.update({ panels: true }); };
     row.ondragstart = (e) => { e.dataTransfer.setData('text/plain', layer.id); app._dragLayer = layer.id; };
     row.ondragover = (e) => { e.preventDefault(); row.classList.add('drop-above'); };
     row.ondragleave = () => row.classList.remove('drop-above');

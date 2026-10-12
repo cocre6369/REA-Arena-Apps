@@ -35,6 +35,8 @@ export class App {
     this.view = { zoom: 1, panX: 0, panY: 0, rotation: 0 };
     this.drag = null;
     this.stroke = null;
+    this.maskEditingLayerId = null;
+    this.strokeMaskMode = null;
     this.cloneSource = null;
     this.measure = null;
     this.ants = 0;
@@ -92,6 +94,7 @@ export class App {
   // ---------------------------------------------------------------- document
   setDoc(doc, label = 'New') {
     this.doc = doc;
+    this.maskEditingLayerId = null;
     this.compCanvas = makeCanvas(doc.width, doc.height);
     this.history.reset(snapshotDoc(doc), label);
     this.view = { zoom: 1, panX: 0, panY: 0, rotation: 0 };
@@ -431,6 +434,7 @@ export class App {
     if (!t) return;
     if (this.tool !== id) this.prevTool = this.tool;
     this.tool = id;
+    if (this.maskEditingLayerId && !['brush', 'pencil', 'eraser'].includes(id)) this.maskEditingLayerId = null;
     this.drag = null;
     this.viewport.style.cursor = CURSORS[t.cursor] || 'default';
     if (!silent) this.update({ toolbar: true, overlay: true });
@@ -507,6 +511,7 @@ export class App {
     const e = this.history.undo();
     if (!e) return;
     restoreDoc(this.doc, e.snap);
+    if (!this.doc.find(this.maskEditingLayerId)?.mask) this.maskEditingLayerId = null;
     this.afterDocRestore();
     this.status('Undo ' + e.label);
   }
@@ -514,6 +519,7 @@ export class App {
     const e = this.history.redo();
     if (!e) return;
     restoreDoc(this.doc, e.snap);
+    if (!this.doc.find(this.maskEditingLayerId)?.mask) this.maskEditingLayerId = null;
     this.afterDocRestore();
     this.status('Redo ' + e.label);
   }
@@ -636,11 +642,68 @@ export class App {
     else if (kind === 'hide') { /* transparent */ }
     else if (kind === 'fromSelection' && doc.selection.has) cx.drawImage(doc.selection.canvas, 0, 0);
     L.mask = m; L.maskEnabled = true;
+    this.maskEditingLayerId = L.id;
     this.push('Add Layer Mask');
+  }
+  editMask() {
+    const L = this.doc.activeLayer;
+    if (!L?.mask) { this.status('Select a layer with a mask first'); return; }
+    this.maskEditingLayerId = this.maskEditingLayerId === L.id ? null : L.id;
+    this.channelPreview = null;
+    this.setActiveTool('brush');
+    this.status(this.maskEditingLayerId ? 'Editing mask: Brush reveals, Eraser hides; click the layer thumbnail to edit pixels' : 'Editing layer pixels');
+    this.update({ panels: true, status: true });
+  }
+  invertMask() {
+    const L = this.doc.activeLayer;
+    if (!L?.mask) return;
+    const c = L.mask.getContext('2d');
+    const id = c.getImageData(0, 0, L.mask.width, L.mask.height);
+    for (let i = 0; i < id.data.length; i += 4) {
+      id.data[i] = id.data[i + 1] = id.data[i + 2] = 255;
+      id.data[i + 3] = 255 - id.data[i + 3];
+    }
+    c.putImageData(id, 0, 0);
+    // The mask is stored as actual alpha pixels, never as a stale cached preview.
+    this.push('Invert Layer Mask');
+  }
+  maskFromTransparency() {
+    const L = this.doc.activeLayer;
+    if (!L?.canvas) return;
+    const mask = makeCanvas(this.doc.width, this.doc.height);
+    const mc = mask.getContext('2d');
+    mc.drawImage(L.canvas, L.x, L.y);
+    const id = mc.getImageData(0, 0, mask.width, mask.height);
+    for (let i = 0; i < id.data.length; i += 4) id.data[i] = id.data[i + 1] = id.data[i + 2] = 255;
+    mc.putImageData(id, 0, 0);
+    L.mask = mask;
+    L.maskEnabled = true;
+    this.maskEditingLayerId = L.id;
+    this.push('Mask from Transparency');
+  }
+  maskToSelection() {
+    const L = this.doc.activeLayer;
+    if (!L?.mask) return;
+    const sel = this.doc.selection;
+    sel.none();
+    sel.ctx.drawImage(L.mask, 0, 0);
+    if (L.maskInverted) sel.invert();
+    sel.has = true;
+    this.push('Selection from Mask');
+  }
+  featherMask(radius) {
+    const L = this.doc.activeLayer;
+    if (!L?.mask || radius <= 0) return;
+    const sel = new Selection(L.mask.width, L.mask.height);
+    sel._c = copyCanvas(L.mask);
+    sel.feather(Math.min(100, radius));
+    L.mask = sel.canvas;
+    this.push('Feather Layer Mask');
   }
   deleteMask(apply = false) {
     const L = this.doc.activeLayer;
     if (!L?.mask) return;
+    if (apply && !L.canvas) { this.status('Rasterize this layer before applying its mask'); return; }
     if (apply && L.canvas) {
       const c = L.canvas.getContext('2d');
       c.globalCompositeOperation = 'destination-in';
@@ -648,6 +711,7 @@ export class App {
       c.globalCompositeOperation = 'source-over';
     }
     L.mask = null;
+    if (this.maskEditingLayerId === L.id) this.maskEditingLayerId = null;
     this.push(apply ? 'Apply Layer Mask' : 'Delete Layer Mask');
   }
   hitTestLayer(x, y) {
@@ -667,6 +731,16 @@ export class App {
   // ---------------------------------------------------------------- strokes
   beginStroke(mode, opts) {
     const doc = this.doc;
+    const mask = this.maskEditingLayerId === doc.activeLayerId && doc.activeLayer?.mask;
+    this.strokeMaskMode = null;
+    if (mask) {
+      if (mode !== 'paint' && mode !== 'erase') { this.status('Use Brush to reveal or Eraser to hide the selected mask'); return; }
+      const L = doc.activeLayer;
+      this.strokeMaskMode = mode === 'erase' ? 'hide' : 'reveal';
+      this.stroke = new Stroke(doc, L, 'paint', { ...opts, color: [1, 1, 1], blend: 'normal' });
+      this.strokeLayer = L;
+      return;
+    }
     let L = this.activeRaster(true);
     if (!L) { this.status('Create a layer first'); return; }
     if (L.type === 'text' || L.type === 'shape') {
@@ -706,15 +780,17 @@ export class App {
       mc.drawImage(this.doc.selection.canvas, 0, 0);
       src = masked;
     }
-    const lc = L.canvas.getContext('2d');
+    const editingMask = !!this.strokeMaskMode;
+    const lc = (editingMask ? L.mask : L.canvas).getContext('2d');
     lc.save();
     lc.globalAlpha = (s.o.opacity ?? 100) / 100;
-    if (s.mode === 'erase') lc.globalCompositeOperation = 'destination-out';
+    if (editingMask) lc.globalCompositeOperation = this.strokeMaskMode === 'hide' ? 'destination-out' : 'source-over';
+    else if (s.mode === 'erase') lc.globalCompositeOperation = 'destination-out';
     else {
       const op = blendOp(s.o.blend || 'normal');
       lc.globalCompositeOperation = needsCustomBlend(s.o.blend) ? 'source-over' : op;
     }
-    if (needsCustomBlend(s.o.blend) && s.mode !== 'erase') {
+    if (!editingMask && needsCustomBlend(s.o.blend) && s.mode !== 'erase') {
       const A = lc.getImageData(0, 0, L.canvas.width, L.canvas.height);
       const B = src.getContext('2d').getImageData(0, 0, L.canvas.width, L.canvas.height);
       customBlend(A.data, B.data, s.o.blend, (s.o.opacity ?? 100) / 100);
@@ -723,7 +799,8 @@ export class App {
       lc.drawImage(src, 0, 0);
     }
     lc.restore();
-    this.push(label || 'Stroke');
+    this.strokeMaskMode = null;
+    this.push(editingMask ? 'Paint Layer Mask' : label || 'Stroke');
   }
   setCloneSource(x, y) {
     const L = this.activeRaster(false) || this.doc.flat().find((l) => l.canvas);
@@ -736,9 +813,9 @@ export class App {
   }
 
   // ---------------------------------------------------------------- selection
-  selectAll() { this.doc.selection.all(); this.update({ overlay: true, panels: true }); }
-  deselect() { this.doc.selection.none(); this.update({ overlay: true, panels: true }); }
-  invertSelection() { this.doc.selection.invert(); this.update({ overlay: true, panels: true }); }
+  selectAll() { this.doc.selection.all(); this.push('Select All'); this.update({ overlay: true, panels: true }); }
+  deselect() { this.doc.selection.none(); this.push('Deselect'); this.update({ overlay: true, panels: true }); }
+  invertSelection() { this.doc.selection.invert(); this.push('Invert Selection'); this.update({ overlay: true, panels: true }); }
   featherSelection(r) { this.doc.selection.feather(r); this.update({ overlay: true, panels: true }); }
   growSelection(n) { this.doc.selection.grow(n); this.update({ overlay: true }); }
   shrinkSelection(n) { this.doc.selection.shrink(n); this.update({ overlay: true }); }

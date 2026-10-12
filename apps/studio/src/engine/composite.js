@@ -60,16 +60,16 @@ export function blendOnto(dst, src, L, doc, opacityOverride) {
   if (scratchUsed) releaseScratch(scratchUsed);
 }
 
-let _invCache = new WeakMap();
 function invertMask(mask) {
-  if (_invCache.has(mask)) return _invCache.get(mask);
   const c = makeCanvas(mask.width, mask.height);
   const cx = c.getContext('2d');
   cx.drawImage(mask, 0, 0);
-  cx.globalCompositeOperation = 'difference';
-  cx.fillStyle = '#fff';
-  cx.fillRect(0, 0, c.width, c.height);
-  _invCache.set(mask, c);
+  const id = cx.getImageData(0, 0, c.width, c.height);
+  for (let i = 0; i < id.data.length; i += 4) {
+    id.data[i] = id.data[i + 1] = id.data[i + 2] = 255;
+    id.data[i + 3] = 255 - id.data[i + 3];
+  }
+  cx.putImageData(id, 0, 0);
   return c;
 }
 

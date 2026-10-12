@@ -26,6 +26,8 @@ jobs:
           cache-dependency-path: apps/studio/package-lock.json
       - name: Install packaging dependencies
         run: npm ci --no-audit --no-fund
+      - name: Check renderer source and tool bindings
+        run: npm run check:source
       - name: Build portable and installer executables
         env:
           GH_TOKEN: ${{ github.token }}

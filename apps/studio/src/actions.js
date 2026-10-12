@@ -76,6 +76,18 @@ export function createActions(app) {
       console.error(e);
     } finally { busy(false); }
   };
+  def('file.place', 'Place Image as Layer…', 'Ctrl+Alt+O', async () => {
+    if (!need()) return;
+    const files = await pickFiles('image/*', false);
+    if (!files?.[0]) return;
+    try {
+      const c = await canvasFromFile(files[0]);
+      const L = new Layer({ name: doc().uniqueName(files[0].name.replace(/\.[^.]+$/, '')), canvas: c,
+        x: Math.round((doc().width - c.width) / 2), y: Math.round((doc().height - c.height) / 2) });
+      doc().addLayer(L, { above: doc().activeLayerId });
+      app.push('Place Image');
+    } catch (e) { toast('Could not place image: ' + e.message); }
+  });
   def('file.save', 'Save (native project)', 'Ctrl+S', async () => {
     if (!need()) return;
     await saveProject(doc(), (doc().name || 'untitled') + '.' + BRAND.fileExt);
@@ -121,7 +133,14 @@ export function createActions(app) {
     if (!need()) return;
     let src = renderDoc(doc());
     const b = doc().selection.bounds();
-    if (b) { const t = makeCanvas(b.w, b.h); t.getContext('2d').drawImage(src, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h); src = t; }
+    if (b) {
+      const t = makeCanvas(b.w, b.h);
+      const tc = t.getContext('2d');
+      tc.drawImage(src, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
+      tc.globalCompositeOperation = 'destination-in';
+      tc.drawImage(doc().selection.canvas, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
+      src = t;
+    }
     app.clipboard = src;
   });
   def('edit.paste', 'Paste', 'Ctrl+V', () => {
@@ -339,6 +358,15 @@ export function createActions(app) {
   def('layer.maskRevealAll', 'Reveal All', '', () => need() && app.addMask('reveal'));
   def('layer.maskHideAll', 'Hide All', '', () => need() && app.addMask('hide'));
   def('layer.maskFromSelection', 'From Selection', '', () => need() && app.addMask('fromSelection'));
+  def('layer.maskEdit', 'Edit Layer Mask', 'Ctrl+Alt+M', () => need() && app.editMask());
+  def('layer.maskInvert', 'Invert Mask', '', () => need() && app.invertMask());
+  def('layer.maskFromAlpha', 'Mask from Layer Transparency', '', () => need() && app.maskFromTransparency());
+  def('layer.maskToSelection', 'Load Mask as Selection', '', () => need() && app.maskToSelection());
+  def('layer.maskFeather', 'Feather Mask…', '', () => {
+    if (!need() || !doc().activeLayer?.mask) return;
+    const n = Number(prompt('Feather mask radius (px):', '4'));
+    if (Number.isFinite(n) && n > 0) app.featherMask(n);
+  });
   def('layer.maskDelete', 'Delete Mask', '', () => need() && app.deleteMask(false));
   def('layer.maskApply', 'Apply Mask', '', () => need() && app.deleteMask(true));
   def('layer.maskDisable', 'Enable/Disable Mask', '', () => {
@@ -346,7 +374,7 @@ export function createActions(app) {
     const L = doc().activeLayer;
     if (!L?.mask) return;
     L.maskEnabled = !L.maskEnabled;
-    app.update({ render: true, panels: true });
+    app.push('Toggle Layer Mask');
   });
   def('layer.clipMask', 'Create Clipping Mask', 'Ctrl+Alt+G', () => {
     if (!need()) return;
@@ -396,6 +424,14 @@ export function createActions(app) {
   });
 
   // ---------------------------------------------------------------- Select
+  def('select.layerAlpha', 'Load Layer Transparency', '', () => {
+    if (!need()) return;
+    const L = doc().activeLayer;
+    if (!L?.canvas) return;
+    const s = doc().selection; s.none();
+    s.ctx.drawImage(L.canvas, L.x, L.y); s.has = true;
+    app.push('Select Layer Transparency');
+  });
   def('select.all', 'All', 'Ctrl+A', () => need() && app.selectAll());
   def('select.none', 'Deselect', 'Ctrl+D', () => need() && app.deselect());
   def('select.inverse', 'Inverse', 'Ctrl+Shift+I', () => need() && app.invertSelection());
@@ -515,7 +551,7 @@ export function createActions(app) {
   // ---------------------------------------------------------------- menu tree
   const MENU = [
     ['File', [
-      ['file.new'], ['file.open'], 'sep',
+      ['file.new'], ['file.open'], ['file.place'], 'sep',
       ['file.save'], ['file.export'], ['file.exportPSD'], 'sep', ['file.close'],
     ]],
     ['Edit', [
@@ -537,14 +573,14 @@ export function createActions(app) {
       ['layer.new'], ['layer.newViaCopy'], ['layer.newViaCut'], ['layer.duplicate'], ['layer.delete'], ['layer.rename'], 'sep',
       ['New Fill Layer', [['layer.newFillSolid'], ['layer.newFillGradient'], ['layer.newFillPattern']]],
       ['New Adjustment Layer', adjLayerMenu.map((a) => [a[0]])], 'sep',
-      ['Layer Mask', [['layer.maskRevealAll'], ['layer.maskHideAll'], ['layer.maskFromSelection'], 'sep', ['layer.maskApply'], ['layer.maskDelete'], ['layer.maskDisable']]],
+      ['Layer Mask', [['layer.maskRevealAll'], ['layer.maskHideAll'], ['layer.maskFromSelection'], ['layer.maskFromAlpha'], 'sep', ['layer.maskEdit'], ['layer.maskInvert'], ['layer.maskFeather'], ['layer.maskToSelection'], 'sep', ['layer.maskApply'], ['layer.maskDelete'], ['layer.maskDisable']]],
       ['layer.clipMask'], 'sep',
       ['layer.group'], ['layer.ungroup'], 'sep',
       ['Arrange', [['layer.bringFront'], ['layer.forward'], ['layer.backward'], ['layer.sendBack']]], 'sep',
       ['layer.mergeDown'], ['layer.mergeVisible'], ['layer.flatten'], ['layer.rasterize'],
     ]],
     ['Select', [
-      ['select.all'], ['select.none'], ['select.inverse'], 'sep',
+      ['select.all'], ['select.none'], ['select.inverse'], ['select.layerAlpha'], 'sep',
       ['select.feather'], ['select.grow'], ['select.shrink'], ['select.smooth'], 'sep',
       ['select.transform'], ['select.save'], ['select.load'],
     ]],
