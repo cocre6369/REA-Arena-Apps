@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chroma Studio</title>
+<link rel="stylesheet" href="styles/app.css" />
+</head>
+<body>
+<div id="app">
+  <header id="menubar" class="menubar"></header>
+  <div id="optionsbar" class="optionsbar"></div>
+
+  <main id="workspace" class="workspace">
+    <aside id="toolpanel" class="toolpanel" aria-label="Tools"></aside>
+
+    <section id="canvasarea" class="canvasarea">
+      <div id="viewport" class="viewport" tabindex="0">
+        <div id="canvasholder" class="canvasholder">
+          <canvas id="view" class="view"></canvas>
+          <canvas id="overlay" class="overlay"></canvas>
+        </div>
+      </div>
+      <div id="dropzone" class="dropzone" hidden>Drop an image to open</div>
+    </section>
+
+    <aside id="rightdock" class="rightdock" aria-label="Panels"></aside>
+  </main>
+
+  <footer id="statusbar" class="statusbar"></footer>
+</div>
+
+<div id="modal-root"></div>
+<div id="toast-root" class="toast-root"></div>
+<div id="busy" class="busy" hidden><div class="busy-inner"><div class="spinner"></div><span id="busy-label">Working…</span></div></div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

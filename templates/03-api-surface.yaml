@@ -1,0 +1,61 @@
+# API surface — {{APP}}
+#
+# Reconstructed from captured traffic, then VERIFIED BY REPLAY.
+# Generate the skeleton with:
+#   python3 scripts/har2fixtures.py captured/<session>.har -o mocks/ --surface 03-api-surface.yaml
+#
+# Confidence: confirmed (>=2 independent sources) | inferred (1 strong source) | unverified
+# Nothing at `unverified` may cross into 06-clean-room-spec.md.
+
+base_urls:
+  production: ""
+  staging: ""
+
+auth:
+  scheme: ""            # bearer | cookie | hmac | api-key | none
+  header: ""
+  refresh: ""           # how is the session renewed, and when
+  expiry_observed: ""
+  confidence: unverified
+
+common_headers:
+  - name: ""
+    value: ""
+    required: unknown   # verify by removing it and replaying
+
+endpoints:
+  - id: ""
+    method: GET
+    path: ""
+    auth: ""
+    query: {}
+    headers: {}
+    request_body: {}
+    response_200: {}
+    response_shape: {}
+    errors:
+      401: ""
+      429: ""
+      500: ""
+    pagination: ""      # cursor | offset | none
+    observed_on: []     # which screens/actions trigger it
+    replay_verified: false
+    fixture: ""
+    evidence: ""
+    confidence: unverified
+
+conventions:
+  versioning: ""
+  error_envelope: ""
+  idempotency: ""
+  rate_limits: ""
+  retry_backoff: ""
+
+replay_log:
+  # record the exact command used to confirm each endpoint
+  - endpoint: ""
+    command: ""
+    result: ""
+
+open_questions:
+  - ""

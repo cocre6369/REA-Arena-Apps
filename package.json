@@ -1,0 +1,14 @@
+{
+  "name": "chroma-studio",
+  "productName": "Chroma Studio",
+  "version": "0.1.0",
+  "description": "Chroma Studio - an independent, from-scratch image editor",
+  "license": "MIT",
+  "author": "REA Arena",
+  "scripts": {
+    "studio:serve": "node apps/studio/tools/serve.cjs",
+    "studio:dist": "npm --prefix apps/studio run dist",
+    "studio:portable": "npm --prefix apps/studio run dist:portable"
+  },
+  "private": true
+}

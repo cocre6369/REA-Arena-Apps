@@ -1,0 +1,28 @@
+# Extracted / decompiled artifacts never enter git:
+# they are the original's expression, and this repo's whole point is keeping
+# them out of the rebuild.
+cases/*/artifacts/
+cases/*/extracted/
+cases/*/captured/
+cases/*/rebuild/
+
+# local toolchain
+tools/
+
+# but keep the case directories themselves
+!cases/**/.gitkeep
+!cases/.gitkeep
+
+# noise
+__pycache__/
+*.py[cod]
+.DS_Store
+*.log
+.env
+.mypy_cache/
+node_modules/
+
+# Desktop packaging outputs
+apps/studio/dist/
+apps/studio/node_modules/
+*.exe

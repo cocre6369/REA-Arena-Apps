@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# rekit - case management for the RE pipeline.
+#
+#   ./scripts/rekit new "Some App" [--platform auto|android|ios|web|flutter|rn|desktop|unknown]
+#   ./scripts/rekit list
+#   ./scripts/rekit check <case>          # which deliverables exist / are still empty
+#   ./scripts/rekit evidence <case> <type> <name> <sha256> "<legal basis>" "<purpose>"
+#   ./scripts/rekit help
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CASES="$ROOT/cases"
+TPL="$ROOT/templates"
+
+die() { echo "error: $*" >&2; exit 1; }
+
+slugify() {
+  echo "$1" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -e 's/[^a-z0-9]\+/-/g' -e 's/^-\+//' -e 's/-\+$//' \
+    | cut -c1-60
+}
+
+usage() { sed -n '3,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+
+case "${1:-}" in
+  new)
+    NAME="${2:-}"
+    [ -n "$NAME" ] || { usage; die "new requires an app name"; }
+    shift 2 || true
+    PLATFORM="auto"
+    ARTIFACT=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --platform|-p) PLATFORM="${2:-auto}"; shift 2 ;;
+        --artifact|-a) ARTIFACT="${2:-}";    shift 2 ;;
+        *) die "unknown option: $1" ;;
+      esac
+    done
+
+    SLUG="$(slugify "$NAME")"
+    [ -n "$SLUG" ] || die "could not derive a slug from '$NAME'"
+    CASE="$CASES/$SLUG"
+    [ -e "$CASE" ] && die "case already exists: $CASE"
+
+    mkdir -p "$CASE"/{artifacts,extracted,captured,mocks,rebuild}
+    DATE="$(date -u +%Y-%m-%d)"
+
+    for tpl in "$TPL"/*; do
+      base="$(basename "$tpl")"
+      sed -e "s/{{APP}}/$NAME/g" \
+          -e "s/{{SLUG}}/$SLUG/g" \
+          -e "s/{{DATE}}/$DATE/g" \
+          -e "s/{{PLATFORM}}/$PLATFORM/g" \
+          "$tpl" > "$CASE/$base"
+    done
+
+    # detected platform, if we were given an artifact
+    DETECTED="$PLATFORM"
+    if [ -n "$ARTIFACT" ]; then
+      [ -f "$ARTIFACT" ] || die "artifact not found: $ARTIFACT"
+      cp "$ARTIFACT" "$CASE/artifacts/"
+      DETECTED="$(python3 "$ROOT/scripts/identify.py" "$ARTIFACT" |
+        sed -n 's/.*docs\/platforms\/\([a-z-]*\)\.md.*/\1/p' | head -1)"
+      DETECTED="${DETECTED:-unknown}"
+      HASH="$(sha256sum "$ARTIFACT" | cut -d' ' -f1)"
+      echo "$DATE,agent,artifact,$(basename "$ARTIFACT"),sha256:$HASH,\"copied into case\",\"triage\",\"-\",\"-\"" \
+        >> "$CASE/01-evidence-log.csv"
+      echo "  artifact  : $(basename "$ARTIFACT")"
+      echo "  sha256    : $HASH"
+    fi
+
+    sed -i "s/^## Legal gate/## Detected platform: ${DETECTED}\n\n## Legal gate/" "$CASE/00-triage.md" 2>/dev/null || true
+    sed -i "s/^- Platform: .*/- Platform: ${DETECTED}/" "$CASE/00-triage.md"
+
+    cat <<EOF
+Opened case: $CASE
+  app       : $NAME
+  platform  : $DETECTED
+  deliverables:
+EOF
+    ls -1 "$CASE" | sed 's/^/    /'
+    cat <<EOF
+
+Next:
+  python3 scripts/identify.py $CASE/artifacts/<file>
+  python3 scripts/stringscan.py $CASE/extracted -o $CASE/02-surface-map.md
+  METHODOLOGY.md for the full pipeline
+EOF
+    ;;
+
+  list)
+    mkdir -p "$CASES"
+    if [ -z "$(ls -A "$CASES" 2>/dev/null)" ]; then echo "no cases yet"; exit 0; fi
+    printf '%-28s %-12s %s\n' CASE DELIVERABLES UPDATED
+    for d in "$CASES"/*/; do
+      [ -d "$d" ] || continue
+      n=$(find "$d" -maxdepth 1 -name '0*.md' -o -maxdepth 1 -name '0*.yaml' -o -maxdepth 1 -name '0*.csv' | wc -l)
+      printf '%-28s %-12s %s\n' "$(basename "$d")" "$n/7" "$(date -u -r "$d" +%Y-%m-%d)"
+    done
+    ;;
+
+  check)
+    CASE="${2:-}"
+    [ -n "$CASE" ] || die "check requires a case name"
+    D="$CASES/$CASE"
+    [ -d "$D" ] || die "no such case: $CASE"
+    echo "Case: $CASE"
+    for f in 00-triage.md 01-evidence-log.csv 02-surface-map.md 03-api-surface.yaml \
+             04-screen-inventory.md 05-data-model.md 06-clean-room-spec.md; do
+      if [ ! -f "$D/$f" ]; then
+        printf '  [ ] %-26s missing\n' "$f"
+        continue
+      fi
+      # count placeholder-free, non-empty lines as a crude "filled in" signal
+      body=$(grep -vE '^\s*($|#|>|- \[ \]|\|.*\|\s*$)' "$D/$f" | grep -vE '^\s*(\|.*---.*\|)' | wc -l)
+      todos=$(grep -cE 'TODO|<name>|\|[[:space:]]*\|[[:space:]]*\||^\s*-\s*$' "$D/$f" || true)
+      if [ "$body" -lt 3 ] || [ "$todos" -gt 3 ]; then
+        printf '  [.] %-26s started (%s lines, %s placeholders)\n' "$f" "$body" "$todos"
+      else
+        printf '  [x] %-26s filled (%s lines)\n' "$f" "$body"
+      fi
+    done
+    echo
+    echo "  artifacts: $(ls -1 "$D/artifacts" 2>/dev/null | wc -l)   extracted: $(ls -1 "$D/extracted" 2>/dev/null | wc -l)   captured: $(ls -1 "$D/captured" 2>/dev/null | wc -l)"
+    ;;
+
+  evidence)
+    CASE="${2:-}"; shift 2 || true
+    D="$CASES/$CASE"
+    [ -d "$D" ] || die "no such case: $CASE"
+    TYPE="${1:-}"; NAME="${2:-}"; HASH="${3:-}"; BASIS="${4:-}"; PURPOSE="${5:-}"
+    [ -n "$TYPE" ] && [ -n "$NAME" ] || die "usage: rekit evidence <case> <type> <name> <sha256> \"<legal basis>\" \"<purpose>\""
+    printf '%s,%s,%s,%s,%s,"%s","%s","%s","%s"\n' \
+      "$(date -u +%Y-%m-%dT%H:%MZ)" "${USER:-agent}" "$TYPE" "$NAME" "$HASH" \
+      "$BASIS" "$PURPOSE" "-" "-" >> "$D/01-evidence-log.csv"
+    echo "logged: $TYPE $NAME"
+    ;;
+
+  help|"")
+    usage
+    ;;
+  *)
+    usage; die "unknown command: $1" ;;
+esac

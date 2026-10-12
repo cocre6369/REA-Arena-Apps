@@ -1,0 +1,2 @@
+timestamp,actor,artifact_type,name,hash,legal_basis,purpose,resulting_artifact,notes
+{{DATE}}T00:00Z,agent,case,cases/{{SLUG}},-,"case opened",triage,-,-
