@@ -31,10 +31,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          npm run dist *>&1 | Tee-Object -FilePath build.log
-          if ($LASTEXITCODE -ne 0) {
-            Get-Content build.log -Tail 35 | ForEach-Object { Write-Host "::error::$($_)" }
-            exit $LASTEXITCODE
+          $proc = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', 'npm run dist -- --publish never > build.log 2>&1' -NoNewWindow -Wait -PassThru
+          $code = $proc.ExitCode
+          $log = Get-Content build.log -Raw
+          Write-Output $log
+          if ($code -ne 0) {
+            $annotation = ($log -replace '\r?\n', '%0A')
+            Write-Host "::error title=Windows build failure::$annotation"
+            exit $code
           }
       - name: Upload downloadable Windows executables
         uses: actions/upload-artifact@v4
